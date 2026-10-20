@@ -28,3 +28,7 @@ lazy-agentd = "lazy_agentd.cli:main"
 Homepage = "https://github.com/apravint/lazy-agentd"
 Repository = "https://github.com/apravint/lazy-agentd"
 Issues = "https://github.com/apravint/lazy-agentd/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lazy_agentd*"]
