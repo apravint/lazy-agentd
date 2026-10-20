@@ -1,0 +1,13 @@
+[Unit]
+Description=Lazy-Agentd Daemon (On-Demand Activation & Auto-Hibernation)
+Requires=lazy-agentd.socket
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lazy-agentd --idle-timeout 900
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

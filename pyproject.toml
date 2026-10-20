@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazy-agentd"
+version = "0.1.0"
+description = "Zero-Idle-RAM Systemd Socket Activation & Auto-Hibernation Engine for Local AI Daemons"
+readme = "README.md"
+authors = [{ name = "Ayyappa Pravin", email = "apravint@gmail.com" }]
+license = { text = "MIT" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Operating System",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+lazy-agentd = "lazy_agentd.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/apravint/lazy-agentd"
+Repository = "https://github.com/apravint/lazy-agentd"
+Issues = "https://github.com/apravint/lazy-agentd/issues"

@@ -1,0 +1,10 @@
+[Unit]
+Description=Lazy-Agentd Socket Activation Endpoint
+PartOf=lazy-agentd.service
+
+[Socket]
+ListenStream=127.0.0.1:9090
+Accept=no
+
+[Install]
+WantedBy=sockets.target
