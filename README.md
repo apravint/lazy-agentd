@@ -125,6 +125,22 @@ if __name__ == "__main__":
 
 ---
 
+## 📎 Paperclip Integration (Zero-Idle-RAM Company Daemons)
+
+When self-hosting [Paperclip](https://github.com/paperclipai/paperclip) or running multiple company background services, agent workers, and webhook listeners locally, running them 24/7 consumes hundreds of megabytes of RAM while idling. 
+
+Use `lazy-agentd` to socket-activate Paperclip background endpoints and agent webhook bridges:
+- **0 MB RAM** while idle
+- Wakes up in milliseconds on inbound webhooks or task dispatch events
+- Automatically shuts down to clean state after tasks finish and idle timeout expires
+
+```bash
+# Generate systemd socket unit for Paperclip webhook bridge
+lazy-agentd --generate-systemd --port 3100 --target "python3 /path/to/paperclip_bridge.py"
+```
+
+---
+
 ## 🧪 Testing
 
 ```bash
