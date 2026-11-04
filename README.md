@@ -7,6 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-green.svg)](https://www.python.org/)
 [![Systemd: Native](https://img.shields.io/badge/Systemd-Socket%20Activated-orange.svg)](#architecture)
+[![M8ven Score](https://m8ven.ai/badge/mcp/apravint-lazy-agentd-4xtrrz?v=f2c4061c7898bb43d65177185609f41f)](https://m8ven.ai/mcp/apravint-lazy-agentd-4xtrrz?s=readme)
 
 <p align="center">
   <b>Stop wasting 4GB–16GB of resident memory on dormant local AI daemons, MCP servers, and vector databases.</b>
