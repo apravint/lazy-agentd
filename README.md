@@ -2,15 +2,15 @@
 
 # 💤 lazy-agentd
 
-**Zero-Idle-RAM Systemd Socket Activation & Auto-Hibernation Engine for Local AI & MCP Daemons**
+**Zero-Idle-RAM Systemd Socket Activation & Auto-Hibernation for Local AI & MCP Daemons**
 
+[![CI](https://github.com/apravint/lazy-agentd/actions/workflows/ci.yml/badge.svg)](https://github.com/apravint/lazy-agentd/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python: 3.8+](https://img.shields.io/badge/Python-3.8%2B-green.svg)](https://www.python.org/)
-[![Systemd: Native](https://img.shields.io/badge/Systemd-Socket%20Activated-orange.svg)](#architecture)
-[![M8ven Score](https://m8ven.ai/badge/mcp/apravint-lazy-agentd-4xtrrz?v=f2c4061c7898bb43d65177185609f41f)](https://m8ven.ai/mcp/apravint-lazy-agentd-4xtrrz?s=readme)
+[![Python: 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
+[![Systemd: Native](https://img.shields.io/badge/Systemd-Socket%20Activated-orange.svg)](#how-it-works)
 
 <p align="center">
-  <b>Stop wasting 4GB–16GB of resident memory on dormant local AI daemons, MCP servers, and vector databases.</b>
+  <b>Stop paying RAM for local AI daemons, MCP servers and vector databases you aren't using right now.</b>
 </p>
 
 </div>
@@ -19,137 +19,186 @@
 
 ## ⚡ The Problem
 
-Local AI infrastructure (Ollama proxies, embedded Qdrant vector retrieval, FastMCP servers, voice dubbing workers) often runs 24/7 in the background. Even when you aren't actively using an agent, these daemons hold memory, maintain open handles, and drain laptop batteries.
+Local AI infrastructure (Ollama, embedded vector stores, FastMCP/HTTP MCP servers, voice workers) often runs 24/7. Even when no agent is using them, these daemons hold memory and open handles, and drain laptop batteries.
 
-**`lazy-agentd` implements zero-idle socket activation:**
-* Systemd listens on the socket with **0% CPU and 0MB resident RAM**.
-* The moment a client requests `http://127.0.0.1:9090`, systemd spawns the daemon in **<120ms** via socket passing (`LISTEN_FDS`).
-* After 15 minutes of inactivity (`--idle-timeout 900`), the process exits cleanly, freeing all RAM and GPU context!
+**`lazy-agentd` makes them on-demand:**
+
+* systemd holds the listening socket. Nothing of yours is running, so it costs no process memory.
+* The first connection starts `lazy-agentd`. In **proxy mode** it then starts your real daemon, waits until it accepts connections, and forwards the traffic. No request is lost, because connections queue in the socket while the daemon starts.
+* After `--idle-timeout` seconds with no open connections and no traffic, the daemon is stopped and `lazy-agentd` exits. The OS reclaims everything they held, including GPU memory. The socket keeps listening for next time.
+
+Wake-up latency is your daemon's own startup time. `lazy-agentd` adds only a Python interpreter start.
 
 ---
 
-## 🏛️ Architecture
+## 🏛️ How it works
 
 ```
-                                  [Client Request]
-                          (Waybar / Agent Prompt / REST)
-                                         │
-                                         ▼
-                     ┌───────────────────────────────────────┐
-                     │       systemd Socket Listener         │
-                     │         (127.0.0.1:9090)              │
-                     │   Consumes 0MB RAM / 0% CPU at Idle   │
-                     └───────────────────┬───────────────────┘
-                                         │
-                         (Packet Arrives: Instant Wakeup)
-                                         ▼
-                     ┌───────────────────────────────────────┐
-                     │          lazy-agentd Process          │
-                     │       Takes over socket (FD 3)        │
-                     │          Processes Requests           │
-                     └───────────────────┬───────────────────┘
-                                         │
-                        (15 Minutes of Inactivity / Dormancy)
-                                         ▼
-                     ┌───────────────────────────────────────┐
-                     │        Clean Process Shutdown         │
-                     │      Frees all Python / GPU Memory    │
-                     │        Socket Remains Listening       │
-                     └───────────────────────────────────────┘
+   [client] ──► systemd socket (127.0.0.1:9090)      nothing running, 0 MB
+                       │ first connection
+                       ▼
+               lazy-agentd (takes over the socket)
+                       │ proxy mode: starts --target, waits until ready
+                       ▼
+               your daemon on 127.0.0.1:{port}  ◄──► traffic forwarded
+                       │ --idle-timeout with no connections
+                       ▼
+               daemon stopped, lazy-agentd exits      back to 0 MB
 ```
 
 ---
 
 ## 🚀 Quickstart
 
-### 1. Installation
+### 1. Install
 
 ```bash
-pip install lazy-agentd
+pip install --user git+https://github.com/apravint/lazy-agentd.git
 ```
 
-### 2. Standalone CLI Usage
+(Once a release is published to PyPI: `pip install --user lazy-agentd`.)
+
+### 2. Make any local daemon lazy (proxy mode)
+
+`{port}` is replaced with a free port that the backend should listen on.
+Clients keep talking to the public port (`-p`).
 
 ```bash
-# Run standalone with a 15-minute idle timeout
-lazy-agentd -p 9090 --idle-timeout 900
+# A FastAPI / FastMCP (HTTP) app
+lazy-agentd -p 9090 --target "uvicorn app:app --host 127.0.0.1 --port {port}"
+
+# Ollama, keeping its usual port for clients
+lazy-agentd -p 11434 --target "env OLLAMA_HOST=127.0.0.1:{port} ollama serve"
+
+# A backend with a fixed port and no way to change it
+lazy-agentd -p 9090 --backend-port 8000 --target "my-daemon"
 ```
 
-### 3. Deploying as a Systemd User Service
+The backend runs in its own process group. On idle it gets `SIGTERM`, then
+`SIGKILL` after 10s, so worker processes it spawned are stopped too. If it
+crashes, the next connection starts it again.
 
-Copy the unit files into `~/.config/systemd/user/`:
+### 3. Install it as a systemd user service
+
+Generate a matching `.socket` + `.service` pair for exactly these options:
+
 ```bash
-mkdir -p ~/.config/systemd/user
-cp systemd/lazy-agentd.* ~/.config/systemd/user/
+lazy-agentd --generate-systemd --name ollama-lazy -p 11434 \
+  --target "env OLLAMA_HOST=127.0.0.1:{port} ollama serve" \
+  --output-dir ~/.config/systemd/user
+
 systemctl --user daemon-reload
-
-# Enable ONLY the socket (not the service!)
-systemctl --user enable --now lazy-agentd.socket
+# Enable ONLY the socket, never the service:
+systemctl --user enable --now ollama-lazy.socket
 ```
 
-Verify that the socket is listening with **zero resident memory**:
+Leave out `--output-dir` to print the units instead. The `systemd/` folder
+in this repo has a plain example pair for the built-in demo server.
+
+Check it:
+
 ```bash
-systemctl --user status lazy-agentd.socket
+systemctl --user status ollama-lazy.socket   # listening, service inactive
+curl http://127.0.0.1:11434/api/tags          # starts it on demand
+journalctl --user -u ollama-lazy.service -f   # watch it start and, later, hibernate
 ```
-
-Now query the endpoint:
-```bash
-curl http://127.0.0.1:9090/
-```
-Systemd will instantly launch `lazy-agentd.service` to process the request!
 
 ---
 
-## 🐍 Python SDK: Wrap Your Own AI Server
+## 🐍 Python SDK: wrap your own server in-process
+
+If your server is a Python `http.server` handler, you don't need a separate
+backend process:
 
 ```python
-from lazy_agentd import LazyDaemonServer
-from http.server import BaseHTTPRequestHandler
 import json
+import logging
+from http.server import BaseHTTPRequestHandler
+
+from lazy_agentd import LazyDaemonServer
+
 
 class MyAgentHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        # Your custom local LLM or MCP logic
+        body = json.dumps({"result": "done"}).encode()
         self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(json.dumps({"result": "done"}).encode("utf-8"))
+        self.wfile.write(body)
+
 
 if __name__ == "__main__":
-    # Automatically inherits systemd socket if available, or binds to 9090
-    server = LazyDaemonServer(
-        handler_class=MyAgentHandler,
-        port=9090,
-        idle_timeout=900  # Exits after 15m idle
-    )
-    server.serve_forever()
+    logging.basicConfig(level=logging.INFO)
+    # Uses the systemd socket if activated, otherwise binds 127.0.0.1:9090.
+    server = LazyDaemonServer(handler_class=MyAgentHandler, port=9090, idle_timeout=900)
+    server.serve_forever()  # returns after 15 minutes without requests
+```
+
+Requests are handled on threads. The idle timer counts from when the last
+request *finished*, so a long-running request (an LLM stream, say) is never
+cut off. Call `server.touch()` to count background work as activity.
+
+`lazy_agentd.listen_fds()` is also exported if you only want a small,
+dependency-free `sd_listen_fds()` for your own server.
+
+---
+
+## 🤔 Why not `systemd-socket-proxyd`?
+
+systemd ships `systemd-socket-proxyd --exit-idle-time=`, which covers the
+proxy half. You still have to write and wire up a second service for the
+backend yourself, and getting `StopWhenUnneeded=`/`BindsTo=` right so the
+backend actually stops is fiddly. `lazy-agentd` is a single command that:
+
+* starts the backend itself and waits until it accepts connections;
+* stops the backend's whole process group on idle;
+* restarts a crashed backend on the next connection;
+* generates the unit files for you;
+* also works without systemd (`lazy-agentd -p ... --target ...` holds the port itself), which is handy for testing.
+
+---
+
+## 📎 Paperclip and webhook bridges
+
+Self-hosted [Paperclip](https://github.com/paperclipai/paperclip) workers,
+agent webhook bridges and similar listeners only need to run while
+something is calling them:
+
+```bash
+lazy-agentd --generate-systemd --name paperclip-bridge -p 3100 \
+  --target "python3 /path/to/paperclip_bridge.py --port {port}" \
+  --output-dir ~/.config/systemd/user
+systemctl --user daemon-reload && systemctl --user enable --now paperclip-bridge.socket
 ```
 
 ---
 
-## 📎 Paperclip Integration (Zero-Idle-RAM Company Daemons)
+## ⚠️ Limits
 
-When self-hosting [Paperclip](https://github.com/paperclipai/paperclip) or running multiple company background services, agent workers, and webhook listeners locally, running them 24/7 consumes hundreds of megabytes of RAM while idling. 
-
-Use `lazy-agentd` to socket-activate Paperclip background endpoints and agent webhook bridges:
-- **0 MB RAM** while idle
-- Wakes up in milliseconds on inbound webhooks or task dispatch events
-- Automatically shuts down to clean state after tasks finish and idle timeout expires
-
-```bash
-# Generate systemd socket unit for Paperclip webhook bridge
-lazy-agentd --generate-systemd --port 3100 --target "python3 /path/to/paperclip_bridge.py"
-```
+* Works with anything that talks **TCP**: HTTP, SSE and streamable-HTTP MCP servers, gRPC, databases. It does **not** wrap **stdio** MCP servers, which aren't network services.
+* One backend per `lazy-agentd` instance. Run one socket per daemon.
+* The backend starts when a client sends its first byte, so health checks that only connect and close don't wake it. A client that connects and stays silent (server-speaks-first protocols such as MySQL or SMTP) starts it after 1s.
+* An idle keep-alive connection counts as activity. Clients that hold connections open forever will keep the daemon awake.
+* Linux only (systemd, process groups).
 
 ---
 
-## 🧪 Testing
+## 🧪 Development
 
 ```bash
-python -m unittest discover -s tests
+pip install -e .
+python -m unittest discover -s . -p 'test_*.py' -t . -v
 ```
+
+The tests include real HTTP round trips, idle-timeout and in-flight-request
+behaviour, proxy mode end-to-end with a real backend process, and (when
+`systemd-socket-activate` is installed) real socket activation.
+
+Releases are published to PyPI by `.github/workflows/publish.yml` when a
+GitHub release is created.
 
 ---
 
 ## 📄 License
 
-MIT License. See [LICENSE](LICENSE) for details. Created by [Ayyappa Pravin (@apravint)](https://github.com/apravint).
+MIT License. See [LICENSE](LICENSE). Created by [Ayyappa Pravin (@apravint)](https://github.com/apravint).

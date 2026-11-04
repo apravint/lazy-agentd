@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lazy-agentd"
-version = "0.1.0"
+version = "0.2.0"
 description = "Zero-Idle-RAM Systemd Socket Activation & Auto-Hibernation Engine for Local AI Daemons"
 readme = "README.md"
 authors = [{ name = "Ayyappa Pravin", email = "apravint@gmail.com" }]
@@ -15,10 +15,15 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: System :: Operating System",
     "Topic :: Scientific/Engineering :: Artificial Intelligence"
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = []
 
 [project.scripts]
@@ -27,8 +32,20 @@ lazy-agentd = "lazy_agentd.cli:main"
 [project.urls]
 Homepage = "https://github.com/apravint/lazy-agentd"
 Repository = "https://github.com/apravint/lazy-agentd"
+Changelog = "https://github.com/apravint/lazy-agentd/blob/main/CHANGELOG.md"
 Issues = "https://github.com/apravint/lazy-agentd/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["lazy_agentd*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+
+[tool.mypy]
+python_version = "3.9"
+files = ["lazy_agentd"]

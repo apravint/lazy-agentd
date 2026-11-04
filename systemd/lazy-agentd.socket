@@ -1,6 +1,5 @@
 [Unit]
-Description=Lazy-Agentd Socket Activation Endpoint
-PartOf=lazy-agentd.service
+Description=lazy-agentd on-demand daemon (socket)
 
 [Socket]
 ListenStream=127.0.0.1:9090

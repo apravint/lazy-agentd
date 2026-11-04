@@ -1,13 +1,16 @@
+# Example user unit. Prefer generating units for your own setup with:
+#   lazy-agentd --generate-systemd --output-dir ~/.config/systemd/user [options]
+# Enable only the .socket; this service is started on the first connection.
+
 [Unit]
-Description=Lazy-Agentd Daemon (On-Demand Activation & Auto-Hibernation)
+Description=lazy-agentd on-demand daemon
 Requires=lazy-agentd.socket
-After=network.target
+After=lazy-agentd.socket
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/lazy-agentd --idle-timeout 900
+# %h is your home directory; this is where `pip install --user` puts scripts.
+ExecStart=%h/.local/bin/lazy-agentd --idle-timeout 900
+Environment=PYTHONUNBUFFERED=1
 Restart=on-failure
 RestartSec=3
-
-[Install]
-WantedBy=default.target
